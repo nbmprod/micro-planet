@@ -4,13 +4,13 @@ import { InputManager } from '../core/InputManager';
 import { PLANET_RADIUS } from '../world/Planet';
 
 // ── Tuning constants ────────────────────────────────────────
-const PLAYER_HEIGHT = 0.55;  // local +Y offset of body centre above feet
+const PLAYER_HEIGHT = 0.35;  // local +Y offset of body centre above feet
 const MOVE_SPEED = 0.010; // angular step per frame (great-circle arc)
 const JUMP_IMPULSE = 0.18;  // initial radial velocity on jump
 const GRAVITY = 0.012; // radial acceleration toward planet each frame
-const CAM_DISTANCE = 10;     // chase distance behind player (world units)
-const CAM_HEIGHT = 2.2;   // camera height above player (local Y)
-const CAM_LERP = 0.10;  // position smoothing factor (0 = frozen, 1 = instant)
+const CAM_DISTANCE = 5;     // chase distance behind player (world units)
+const CAM_HEIGHT = 3.2;   // camera height above player (local Y)
+const CAM_LERP = 0.50;  // position smoothing factor (0 = frozen, 1 = instant)
 
 // ── Reusable scratch objects (module-scoped, not per-frame allocated) ───────
 // Keeping these outside the class prevents GC pressure in the hot update path.
@@ -83,7 +83,7 @@ export class Player {
 
         // Body
         const body = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5, 0.9, 0.3),
+            new THREE.BoxGeometry(0.5, 0.6, 0.3),
             new THREE.MeshStandardMaterial({ color: 0xe04020, roughness: 0.6 }),
         );
         body.castShadow = true;
