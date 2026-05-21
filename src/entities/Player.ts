@@ -1,11 +1,15 @@
 import * as THREE from 'three';
 import { GameState } from '../core/GameState';
 import { InputManager } from '../core/InputManager';
+import { DecorationManager } from '../world/DecorationManager';
+import { Planet } from '../world/Planet';
 import { PLANET_RADIUS } from '../world/Planet';
 
 // ── Tuning constants ────────────────────────────────────────
 const PLAYER_HEIGHT = 0.35;  // local +Y offset of body centre above feet
 const MOVE_SPEED = 0.010; // angular step per frame (great-circle arc)
+const SWIM_SPEED_FACTOR = 0.70; // reduce movement speed in water
+const PLAYER_COLLISION_RADIUS = 0.32;
 const JUMP_IMPULSE = 0.18;  // initial radial velocity on jump
 const GRAVITY = 0.012; // radial acceleration toward planet each frame
 const CAM_DISTANCE = 5;     // chase distance behind player (world units)
@@ -64,22 +68,30 @@ const _worldUp = new THREE.Vector3(0, 1, 0); // immutable reference axis
  */
 export class Player {
     private readonly _group: THREE.Group;
+    private readonly _visual: THREE.Group;
     private readonly _camera: THREE.PerspectiveCamera;
     private readonly _state: GameState;
     private readonly _input: InputManager;
+    private readonly _planet: Planet;
+    private readonly _decorations: DecorationManager;
 
     constructor(
         scene: THREE.Scene,
         camera: THREE.PerspectiveCamera,
         state: GameState,
         input: InputManager,
+        planet: Planet,
+        decorations: DecorationManager,
     ) {
         this._camera = camera;
         this._state = state;
         this._input = input;
+        this._planet = planet;
+        this._decorations = decorations;
 
-        // ── Build mesh hierarchy ────────────────────────────────
+        // ── Build mesh hierarchy ───────────────────────────────
         this._group = new THREE.Group();
+        this._visual = new THREE.Group();
 
         // Body
         const body = new THREE.Mesh(
@@ -88,7 +100,7 @@ export class Player {
         );
         body.castShadow = true;
         body.position.y = PLAYER_HEIGHT;
-        this._group.add(body);
+        this._visual.add(body);
 
         // Head
         const head = new THREE.Mesh(
@@ -97,7 +109,7 @@ export class Player {
         );
         head.castShadow = true;
         head.position.y = PLAYER_HEIGHT + 0.72;
-        this._group.add(head);
+        this._visual.add(head);
 
         // Eyes (indicate facing direction through local +Z offset)
         const eyeGeo = new THREE.SphereGeometry(0.055, 6, 6);
@@ -105,12 +117,13 @@ export class Player {
         for (const x of [-0.1, 0.1]) {
             const eye = new THREE.Mesh(eyeGeo, eyeMat);
             eye.position.set(x, PLAYER_HEIGHT + 0.74, 0.19);
-            this._group.add(eye);
+            this._visual.add(eye);
         }
 
         // Initial position: north pole of the planet
         this._state.surfaceNormal.set(0, 1, 0);
         this._state.forward.set(0, 0, -1);
+        this._group.add(this._visual);
         this._group.position.set(0, PLANET_RADIUS, 0);
 
         scene.add(this._group);
@@ -128,6 +141,7 @@ export class Player {
         this._handleTurning();
         this._handleMovement();
         this._applyGravity();
+        this._updateSwimmingState();
         this._orientGroup();
         this._updateCamera();
         this._updateDerivedMetrics();
@@ -153,16 +167,16 @@ export class Player {
      * This traces a great-circle arc — the geodesic of a sphere.
      */
     private _handleMovement(): void {
-        const move = this._input.axis('KeyS', 'KeyW') +
+        const move = this._input.axis('KeyW', 'KeyS') +
             this._input.axis('ArrowUp', 'ArrowDown');
-        const strafe = this._input.axis('KeyA', 'KeyD') +
+        const strafe = this._input.axis('KeyD', 'KeyA') +
             this._input.axis('ArrowRight', 'ArrowLeft');
 
         if (move === 0 && strafe === 0) return;
 
         // Screen-relative forward direction from the camera projected onto the
         // player's tangent plane. This makes W/S move away/toward the screen.
-        this._camera.getWorldDirection(_scratchVec);
+        this._camera.getWorldDirection(_scratchVec).negate();
         _scratchVec
             .addScaledVector(this._state.surfaceNormal, -_scratchVec.dot(this._state.surfaceNormal))
             .normalize();
@@ -184,10 +198,22 @@ export class Player {
 
         // Move the surfaceNormal along the great circle in the desired direction.
         _scratchVec2.crossVectors(_scratchVec, this._state.surfaceNormal).normalize();
-        _scratchQuat.setFromAxisAngle(_scratchVec2, MOVE_SPEED);
-        this._state.surfaceNormal.applyQuaternion(_scratchQuat).normalize();
+        const moveSpeed = MOVE_SPEED * (this._state.isSwimming ? SWIM_SPEED_FACTOR : 1);
+        _scratchQuat.setFromAxisAngle(_scratchVec2, moveSpeed);
 
-        // Player should face the exact movement direction after moving.
+        _scratchVec2.copy(this._state.surfaceNormal).applyQuaternion(_scratchQuat).normalize();
+        const nextSurfaceNormal = _scratchVec2;
+
+        if (!this._planet.isPointOnLand(nextSurfaceNormal)) {
+            return;
+        }
+
+        if (this._decorations.collidesWith(nextSurfaceNormal, PLAYER_COLLISION_RADIUS)) {
+            return;
+        }
+
+        this._state.surfaceNormal.copy(nextSurfaceNormal);
+
         this._state.forward.copy(_scratchVec).applyQuaternion(_scratchQuat);
         this._state.forward
             .addScaledVector(
@@ -212,6 +238,12 @@ export class Player {
             this._state.radialVelocity = 0;
             this._state.grounded = true;
         }
+    }
+
+    private _updateSwimmingState(): void {
+        this._state.isSwimming = false;
+        this._visual.position.y = 0;
+        this._visual.rotation.x = 0;
     }
 
     /**

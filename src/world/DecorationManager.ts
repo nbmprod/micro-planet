@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { PLANET_RADIUS } from './Planet';
 
+const _collisionVec = new THREE.Vector3();
+
 /**
  * DecorationEntry — defines a single static decoration on the planet surface.
  *
@@ -13,6 +15,11 @@ interface DecorationEntry {
     latDeg: number;
     lonDeg: number;
     type: 'tree' | 'rock';
+}
+
+interface DecorationCollider {
+    position: THREE.Vector3;
+    radius: number;
 }
 
 /** Static decoration layout — lat/lon in degrees. */
@@ -46,6 +53,7 @@ const DECORATION_DATA: DecorationEntry[] = [
 export class DecorationManager {
     /** Reusable UP vector for orientation quaternion (avoid repeated allocation). */
     private static readonly _WORLD_UP = new THREE.Vector3(0, 1, 0);
+    private readonly _colliderEntries: DecorationCollider[] = [];
 
     constructor(scene: THREE.Scene) {
         for (const entry of DECORATION_DATA) {
@@ -55,6 +63,10 @@ export class DecorationManager {
 
             this._placeOnSurface(mesh, entry.latDeg, entry.lonDeg);
             scene.add(mesh);
+            this._colliderEntries.push({
+                position: mesh.position.clone(),
+                radius: entry.type === 'tree' ? 0.55 : 0.32,
+            });
         }
     }
 
@@ -117,5 +129,18 @@ export class DecorationManager {
         );
         rock.castShadow = true;
         return rock;
+    }
+
+    public collidesWith(surfaceNormal: THREE.Vector3, radius: number): boolean {
+        _collisionVec.copy(surfaceNormal).multiplyScalar(PLANET_RADIUS);
+
+        for (const entry of this._colliderEntries) {
+            const maxDistance = radius + entry.radius;
+            if (_collisionVec.distanceToSquared(entry.position) < maxDistance * maxDistance) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

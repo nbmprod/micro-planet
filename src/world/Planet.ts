@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+const _planetNormal = new THREE.Vector3();
+
 /**
  * Planet — creates and owns the layered planet meshes.
  *
@@ -18,6 +20,14 @@ import * as THREE from 'three';
 export const PLANET_RADIUS = 10; // exported so Player/Decorations stay in sync
 
 export class Planet {
+    private static readonly _LAND_ZONES = [
+        { center: new THREE.Vector3(0.34, 0.82, 0.20).normalize(), threshold: 0.78 },
+        { center: new THREE.Vector3(-0.60, -0.25, -0.75).normalize(), threshold: 0.75 },
+        { center: new THREE.Vector3(0.30, -0.70, 0.65).normalize(), threshold: 0.76 },
+        { center: new THREE.Vector3(-0.82, 0.30, 0.47).normalize(), threshold: 0.74 },
+        { center: new THREE.Vector3(0.00, 0.95, 0.00).normalize(), threshold: 0.88 },
+    ];
+
     private readonly _terrain: THREE.Mesh;
     private readonly _ocean: THREE.Mesh;
     private readonly _atmosphere: THREE.Mesh;
@@ -25,10 +35,23 @@ export class Planet {
 
     constructor(scene: THREE.Scene) {
         // ── Terrain ───────────────────────────────────────────
+        const terrainGeometry = new THREE.SphereGeometry(PLANET_RADIUS, 64, 64);
+
+        const colorArray = new Float32Array(terrainGeometry.attributes.position.count * 3);
+        for (let i = 0; i < terrainGeometry.attributes.position.count; i += 1) {
+            const vertex = new THREE.Vector3().fromBufferAttribute(terrainGeometry.attributes.position as THREE.BufferAttribute, i);
+            const isLand = this.isPointOnLand(vertex);
+            const color = isLand ? new THREE.Color(0x2d7d3a) : new THREE.Color(0x1a5fa8);
+            colorArray[i * 3] = color.r;
+            colorArray[i * 3 + 1] = color.g;
+            colorArray[i * 3 + 2] = color.b;
+        }
+        terrainGeometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+
         this._terrain = new THREE.Mesh(
-            new THREE.SphereGeometry(PLANET_RADIUS, 64, 64),
+            terrainGeometry,
             new THREE.MeshStandardMaterial({
-                color: 0x2d7d3a,
+                vertexColors: true,
                 roughness: 0.85,
                 metalness: 0.05,
             }),
@@ -75,13 +98,24 @@ export class Planet {
         scene.add(this._wireframe);
     }
 
+    public isPointOnLand(point: THREE.Vector3): boolean {
+        const normal = _planetNormal.copy(point).normalize();
+        for (const zone of Planet._LAND_ZONES) {
+            if (zone.center.dot(normal) >= zone.threshold) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Called each frame by GameEngine.
      * Slowly rotates the terrain mesh for a sense of life.
      * @param time - monotonically increasing elapsed time (seconds × speed)
      */
-    update(time: number): void {
-        this._terrain.rotation.y = time * 0.15;
+    update(): void {
+        // Keep the terrain static so blue water zones remain in their original
+        // positions after initial render.
 
         // FUTURE_HOOK: Lerp terrain colour toward pollution tint:
         // const mat = this._terrain.material as THREE.MeshStandardMaterial;

@@ -34,7 +34,6 @@ export class GameEngine {
     // ── Subsystems ─────────────────────────────────────────
     private readonly state: GameState;
     private readonly input: InputManager;
-    private readonly environment: Environment;
     private readonly planet: Planet;
     private readonly decorations: DecorationManager;
     private readonly player: Player;
@@ -46,6 +45,7 @@ export class GameEngine {
     // ── HUD element refs ───────────────────────────────────
     private readonly _elCoords: HTMLElement;
     private readonly _elAltitude: HTMLElement;
+    private readonly _elDebugState: HTMLElement;
 
     constructor(canvas: HTMLCanvasElement) {
         // ── Renderer ─────────────────────────────────────────
@@ -76,16 +76,24 @@ export class GameEngine {
         this.input = new InputManager();
 
         // ── World subsystems (order matters: env before planet) ─
-        this.environment = new Environment(this.scene);
+        new Environment(this.scene);
         this.planet = new Planet(this.scene);
         this.decorations = new DecorationManager(this.scene);
 
         // ── Player (receives scene for group attachment, input, state, camera) ─
-        this.player = new Player(this.scene, this.camera, this.state, this.input);
+        this.player = new Player(
+            this.scene,
+            this.camera,
+            this.state,
+            this.input,
+            this.planet,
+            this.decorations,
+        );
 
         // ── HUD references ────────────────────────────────────
         this._elCoords = document.getElementById('stat-coords')!;
         this._elAltitude = document.getElementById('stat-altitude')!;
+        this._elDebugState = document.getElementById('stat-state')!;
 
         // ── Resize handler ────────────────────────────────────
         window.addEventListener('resize', this._onResize);
@@ -108,7 +116,7 @@ export class GameEngine {
         //   4. Camera follows player.
         //   5. HUD reflects GameState values.
 
-        this.planet.update(this._time);
+        this.planet.update();
         this.player.update();           // physics + quaternion math + camera
         this._updateHUD();
 
@@ -118,9 +126,17 @@ export class GameEngine {
     // ── HUD update ────────────────────────────────────────────
     private _updateHUD(): void {
         const s = this.state;
+        const isMoving = this.input.axis('KeyW', 'KeyS') !== 0 ||
+            this.input.axis('KeyD', 'KeyA') !== 0 ||
+            this.input.axis('ArrowUp', 'ArrowDown') !== 0 ||
+            this.input.axis('ArrowRight', 'ArrowLeft') !== 0;
+        const zone = this.planet.isPointOnLand(s.surfaceNormal) ? 'LAND' : 'WATER';
+
         this._elCoords.textContent =
             `lat: ${s.latitudeDeg.toFixed(1)}°  lon: ${s.longitudeDeg.toFixed(1)}°`;
         this._elAltitude.textContent = `alt: ${s.altitude.toFixed(2)}`;
+        this._elDebugState.textContent =
+            `state: ${isMoving ? 'MOVING' : 'IDLE'} | zone: ${zone} | swim: ${s.isSwimming} | grounded: ${s.grounded}`;
 
         // FUTURE_HOOK: Update pollution bar, oxygen meter, score display here.
         // e.g. document.getElementById('stat-pollution')!.textContent =

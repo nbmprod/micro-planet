@@ -35,6 +35,9 @@ export class GameState {
     /** True when the player is resting on the ground. */
     grounded: boolean = true;
 
+    /** True when the player is swimming instead of walking. */
+    isSwimming: boolean = false;
+
     // ── Derived HUD metrics (recomputed each frame) ─────────
     /** Latitude in degrees derived from surfaceNormal.y. */
     latitudeDeg: number = 0;
