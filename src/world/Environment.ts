@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GameConfig } from '../config/GameConfig';
 
 /**
  * Environment — scene-wide lighting, fog, and the procedural starfield.
@@ -20,8 +21,12 @@ export class Environment {
 
     constructor(scene: THREE.Scene) {
         // ── Main Sunlight (Casts Shadows) ────────────────────
-        this._sun = new THREE.DirectionalLight(0xfff4d6, 2.0); // Balanced intensity
-        this._sun.position.set(30, 40, 20);
+        this._sun = new THREE.DirectionalLight(GameConfig.environment.sunColor, GameConfig.environment.sunIntensity);
+        this._sun.position.set(
+            GameConfig.environment.sunPosition[0],
+            GameConfig.environment.sunPosition[1],
+            GameConfig.environment.sunPosition[2],
+        );
         this._sun.castShadow = true;
         this._sun.shadow.mapSize.set(2048, 2048);
         this._sun.shadow.camera.near = 0.5;
@@ -32,20 +37,28 @@ export class Environment {
 
         // ── Back Sunlight (Fills the Dark Side) ───────────────
         // Placed exactly opposite to the main sun so no part of the planet is dark
-        this._backSun = new THREE.DirectionalLight(0xfff4d6, 1.2);
-        this._backSun.position.set(-30, -40, -20);
+        this._backSun = new THREE.DirectionalLight(GameConfig.environment.sunColor, GameConfig.environment.backSunIntensity);
+        this._backSun.position.set(
+            GameConfig.environment.backSunPosition[0],
+            GameConfig.environment.backSunPosition[1],
+            GameConfig.environment.backSunPosition[2],
+        );
         this._backSun.castShadow = false; // Disable to keep performance high
         scene.add(this._backSun);
 
         // ── Hemisphere Light (Soft Sky/Ground Glow) ───────────
         // Provides a natural Animal Crossing look by bouncing blue light from above
         // and green/earth tones from below.
-        this._hemiLight = new THREE.HemisphereLight(0xddf0ff, 0x2d4d2a, 0.8);
+        this._hemiLight = new THREE.HemisphereLight(
+            GameConfig.environment.hemiSkyColor,
+            GameConfig.environment.hemiGroundColor,
+            GameConfig.environment.hemiIntensity,
+        );
         scene.add(this._hemiLight);
 
         // ── Ambient Fill ─────────────────────────────────────
         // Raised ambient level slightly to keep everything bright and crisp
-        this._ambient = new THREE.AmbientLight(0xffffff, 0.5);
+        this._ambient = new THREE.AmbientLight(GameConfig.environment.ambientColor, GameConfig.environment.ambientIntensity);
         scene.add(this._ambient);
 
         // ── Star field ────────────────────────────────────────
@@ -58,7 +71,7 @@ export class Environment {
      * Uses the spherical coordinate method (theta/phi) for even distribution.
      */
     private _buildStarfield(): THREE.Points {
-        const COUNT = 4000;
+        const COUNT = GameConfig.environment.starCount;
         const geo = new THREE.BufferGeometry();
         const pos = new Float32Array(COUNT * 3);
         const col = new Float32Array(COUNT * 3);
@@ -90,7 +103,7 @@ export class Environment {
         geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
 
         const mat = new THREE.PointsMaterial({
-            size: 0.35,
+            size: GameConfig.environment.starSize,
             vertexColors: true,
             sizeAttenuation: true,
         });

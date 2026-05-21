@@ -1,6 +1,13 @@
 import * as THREE from 'three';
+import { GameConfig } from '../config/GameConfig';
 
 const _planetNormal = new THREE.Vector3();
+
+const PLANET_RADIUS = GameConfig.planet.radius;
+const _LAND_ZONES = GameConfig.planet.landZones.map((zone) => ({
+    center: new THREE.Vector3(zone.center[0], zone.center[1], zone.center[2]).normalize(),
+    threshold: zone.threshold,
+}));
 
 /**
  * Planet — creates and owns the layered planet meshes.
@@ -17,16 +24,7 @@ const _planetNormal = new THREE.Vector3();
  * FUTURE_HOOK: Add a procedural cloud layer (separate slow-rotating sphere).
  */
 
-export const PLANET_RADIUS = 10; // exported so Player/Decorations stay in sync
-
 export class Planet {
-    private static readonly _LAND_ZONES = [
-        { center: new THREE.Vector3(0.34, 0.82, 0.20).normalize(), threshold: 0.78 },
-        { center: new THREE.Vector3(-0.60, -0.25, -0.75).normalize(), threshold: 0.75 },
-        { center: new THREE.Vector3(0.30, -0.70, 0.65).normalize(), threshold: 0.76 },
-        { center: new THREE.Vector3(-0.82, 0.30, 0.47).normalize(), threshold: 0.74 },
-        { center: new THREE.Vector3(0.00, 0.95, 0.00).normalize(), threshold: 0.88 },
-    ];
 
     private readonly _terrain: THREE.Mesh;
     private readonly _ocean: THREE.Mesh;
@@ -35,13 +33,19 @@ export class Planet {
 
     constructor(scene: THREE.Scene) {
         // ── Terrain ───────────────────────────────────────────
-        const terrainGeometry = new THREE.SphereGeometry(PLANET_RADIUS, 64, 64);
+        const terrainGeometry = new THREE.SphereGeometry(
+            PLANET_RADIUS,
+            GameConfig.planet.terrainSegments,
+            GameConfig.planet.terrainSegments,
+        );
 
         const colorArray = new Float32Array(terrainGeometry.attributes.position.count * 3);
         for (let i = 0; i < terrainGeometry.attributes.position.count; i += 1) {
             const vertex = new THREE.Vector3().fromBufferAttribute(terrainGeometry.attributes.position as THREE.BufferAttribute, i);
             const isLand = this.isPointOnLand(vertex);
-            const color = isLand ? new THREE.Color(0x2d7d3a) : new THREE.Color(0x1a5fa8);
+            const color = isLand
+                ? new THREE.Color(GameConfig.planet.landColor)
+                : new THREE.Color(GameConfig.planet.waterColor);
             colorArray[i * 3] = color.r;
             colorArray[i * 3 + 1] = color.g;
             colorArray[i * 3 + 2] = color.b;
@@ -61,24 +65,32 @@ export class Planet {
 
         // ── Ocean (97 % radius, slightly transparent) ─────────
         this._ocean = new THREE.Mesh(
-            new THREE.SphereGeometry(PLANET_RADIUS * 0.97, 48, 48),
+            new THREE.SphereGeometry(
+                PLANET_RADIUS * GameConfig.planet.oceanRadiusScale,
+                GameConfig.planet.oceanSegments,
+                GameConfig.planet.oceanSegments,
+            ),
             new THREE.MeshStandardMaterial({
-                color: 0x1a5fa8,
-                roughness: 0.05,
-                metalness: 0.3,
+                color: GameConfig.planet.oceanColor,
+                roughness: GameConfig.planet.oceanRoughness,
+                metalness: GameConfig.planet.oceanMetalness,
                 transparent: true,
-                opacity: 0.88,
+                opacity: GameConfig.planet.oceanOpacity,
             }),
         );
         scene.add(this._ocean);
 
         // ── Atmosphere (BackSide rendered shell) ──────────────
         this._atmosphere = new THREE.Mesh(
-            new THREE.SphereGeometry(PLANET_RADIUS * 1.08, 32, 32),
+            new THREE.SphereGeometry(
+                PLANET_RADIUS * GameConfig.planet.atmosphereRadiusScale,
+                GameConfig.planet.atmosphereSegments,
+                GameConfig.planet.atmosphereSegments,
+            ),
             new THREE.MeshStandardMaterial({
-                color: 0x60aaff,
+                color: GameConfig.planet.atmosphereColor,
                 transparent: true,
-                opacity: 0.08,
+                opacity: GameConfig.planet.atmosphereOpacity,
                 side: THREE.BackSide,
                 depthWrite: false,
             }),
@@ -87,12 +99,16 @@ export class Planet {
 
         // ── Wireframe overlay (shows curvature clearly) ───────
         this._wireframe = new THREE.Mesh(
-            new THREE.SphereGeometry(PLANET_RADIUS + 0.02, 24, 24),
+            new THREE.SphereGeometry(
+                PLANET_RADIUS + GameConfig.planet.wireframeRadiusOffset,
+                GameConfig.planet.wireframeSegments,
+                GameConfig.planet.wireframeSegments,
+            ),
             new THREE.MeshBasicMaterial({
-                color: 0x3aff8a,
+                color: GameConfig.planet.wireframeColor,
                 wireframe: true,
                 transparent: true,
-                opacity: 0.06,
+                opacity: GameConfig.planet.wireframeOpacity,
             }),
         );
         scene.add(this._wireframe);
@@ -100,7 +116,7 @@ export class Planet {
 
     public isPointOnLand(point: THREE.Vector3): boolean {
         const normal = _planetNormal.copy(point).normalize();
-        for (const zone of Planet._LAND_ZONES) {
+        for (const zone of _LAND_ZONES) {
             if (zone.center.dot(normal) >= zone.threshold) {
                 return true;
             }

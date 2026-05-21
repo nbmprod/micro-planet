@@ -4,8 +4,8 @@ import { InputManager } from './InputManager';
 import { Environment } from '../world/Environment';
 import { Planet } from '../world/Planet';
 import { DecorationManager } from '../world/DecorationManager';
+import { CollisionSystem } from './CollisionSystem';
 import { Player } from '../entities/Player';
-import { Penguin } from '../entities/Penguin';
 
 /**
  * GameEngine — the top-level orchestrator.
@@ -36,9 +36,8 @@ export class GameEngine {
     private readonly state: GameState;
     private readonly input: InputManager;
     private readonly planet: Planet;
-    private readonly decorations: DecorationManager;
+    private readonly collisionSystem: CollisionSystem;
     private readonly player: Player;
-    private readonly penguin: Penguin;
 
     // ── Internal ───────────────────────────────────────────
     private _rafId: number = 0;
@@ -80,7 +79,8 @@ export class GameEngine {
         // ── World subsystems (order matters: env before planet) ─
         new Environment(this.scene);
         this.planet = new Planet(this.scene);
-        this.decorations = new DecorationManager(this.scene);
+        this.collisionSystem = new CollisionSystem();
+        new DecorationManager(this.scene, this.collisionSystem);
 
         // ── Player (receives scene for group attachment, input, state, camera) ─
         this.player = new Player(
@@ -89,11 +89,8 @@ export class GameEngine {
             this.state,
             this.input,
             this.planet,
-            this.decorations,
+            this.collisionSystem,
         );
-
-        // ── Penguin (NPC that walks around the terrain) ─
-        // this.penguin = new Penguin(this.scene, this.planet);
 
         // ── HUD references ────────────────────────────────────
         this._elCoords = document.getElementById('stat-coords')!;

@@ -1,20 +1,10 @@
 import * as THREE from 'three';
 import { GameState } from '../core/GameState';
 import { InputManager } from '../core/InputManager';
-import { DecorationManager } from '../world/DecorationManager';
+import { CollisionSystem } from '../core/CollisionSystem';
 import { Planet } from '../world/Planet';
-import { PLANET_RADIUS } from '../world/Planet';
+import { GameConfig } from '../config/GameConfig';
 
-// ── Tuning constants ────────────────────────────────────────
-const PLAYER_HEIGHT = 0.35 / 3;  // local +Y offset of body centre above feet (scaled 1/3)
-const MOVE_SPEED = 0.005; // angular step per frame (great-circle arc)
-const SWIM_SPEED_FACTOR = 0.70; // reduce movement speed in water
-const PLAYER_COLLISION_RADIUS = 0.32 / 3; // scaled collision radius
-const JUMP_IMPULSE = 0.09;  // initial radial velocity on jump
-const GRAVITY = 0.008; // radial acceleration toward planet each frame
-const CAM_DISTANCE = 2;     // chase distance behind player (world units)
-const CAM_HEIGHT = 1.2;   // camera height above player (local Y)
-const CAM_LERP = 0.50;  // position smoothing factor (0 = frozen, 1 = instant)
 
 // ── Reusable scratch objects (module-scoped, not per-frame allocated) ───────
 // Keeping these outside the class prevents GC pressure in the hot update path.
@@ -73,7 +63,7 @@ export class Player {
     private readonly _state: GameState;
     private readonly _input: InputManager;
     private readonly _planet: Planet;
-    private readonly _decorations: DecorationManager;
+    private readonly _collisionSystem: CollisionSystem;
 
     constructor(
         scene: THREE.Scene,
@@ -81,13 +71,13 @@ export class Player {
         state: GameState,
         input: InputManager,
         planet: Planet,
-        decorations: DecorationManager,
+        collisionSystem: CollisionSystem,
     ) {
         this._camera = camera;
         this._state = state;
         this._input = input;
         this._planet = planet;
-        this._decorations = decorations;
+        this._collisionSystem = collisionSystem;
 
         // ── Build mesh hierarchy ───────────────────────────────
         this._group = new THREE.Group();
@@ -95,28 +85,32 @@ export class Player {
 
         // Body
         const body = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5 / 3, 0.6 / 3, 0.3 / 3),
+            new THREE.BoxGeometry(
+                GameConfig.player.bodyDimensions.x,
+                GameConfig.player.bodyDimensions.y,
+                GameConfig.player.bodyDimensions.z,
+            ),
             new THREE.MeshStandardMaterial({ color: 0xe04020, roughness: 0.6 }),
         );
         body.castShadow = true;
-        body.position.y = PLAYER_HEIGHT;
+        body.position.y = GameConfig.player.height;
         this._visual.add(body);
 
         // Head
         const head = new THREE.Mesh(
-            new THREE.SphereGeometry(0.22 / 3, 12, 12),
+            new THREE.SphereGeometry(GameConfig.player.headRadius, 12, 12),
             new THREE.MeshStandardMaterial({ color: 0xf5c58a, roughness: 0.5 }),
         );
         head.castShadow = true;
-        head.position.y = PLAYER_HEIGHT + (0.72 / 3);
+        head.position.y = GameConfig.player.height + (0.72 / 3);
         this._visual.add(head);
 
         // Eyes (indicate facing direction through local +Z offset)
-        const eyeGeo = new THREE.SphereGeometry(0.055 / 3, 6, 6);
+        const eyeGeo = new THREE.SphereGeometry(GameConfig.player.eyeRadius, 6, 6);
         const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
         for (const x of [-0.1 / 3, 0.1 / 3]) {
             const eye = new THREE.Mesh(eyeGeo, eyeMat);
-            eye.position.set(x, PLAYER_HEIGHT + (0.74 / 3), 0.19 / 3);
+            eye.position.set(x, GameConfig.player.height + GameConfig.player.eyeOffsetY, GameConfig.player.eyeOffsetZ);
             this._visual.add(eye);
         }
 
@@ -124,13 +118,13 @@ export class Player {
         this._state.surfaceNormal.set(0, 1, 0);
         this._state.forward.set(0, 0, -1);
         this._group.add(this._visual);
-        this._group.position.set(0, PLANET_RADIUS, 0);
+        this._group.position.set(0, GameConfig.planet.radius, 0);
 
         scene.add(this._group);
 
         // Seed camera behind the player at start
-        camera.position.set(0, PLANET_RADIUS + CAM_HEIGHT + 1, CAM_DISTANCE + 1);
-        camera.lookAt(0, PLANET_RADIUS, 0);
+        camera.position.set(0, GameConfig.planet.radius + GameConfig.camera.height + 1, GameConfig.camera.distance + 1);
+        camera.lookAt(0, GameConfig.planet.radius, 0);
     }
 
     /**
@@ -138,13 +132,20 @@ export class Player {
      * Order inside: turn → move → gravity → orient group → camera → HUD metrics.
      */
     update(): void {
-        this._handleTurning();
+        this._updateState();
+        this._applyStateToVisuals();
+        this._updateCamera();
+        this._updateDerivedMetrics();
+    }
+
+    private _updateState(): void {
         this._handleMovement();
         this._applyGravity();
         this._updateSwimmingState();
+    }
+
+    private _applyStateToVisuals(): void {
         this._orientGroup();
-        this._updateCamera();
-        this._updateDerivedMetrics();
     }
 
     // ── Private sub-steps ─────────────────────────────────────
@@ -153,11 +154,6 @@ export class Player {
      * Rotate the forward tangent vector around the outward surface normal.
      * This is a pure yaw in the player's local frame.
      */
-    private _handleTurning(): void {
-        // A/D and ArrowLeft/ArrowRight now perform instant lateral movement
-        // in _handleMovement instead of yaw rotation.
-    }
-
     /**
      * Walk along the sphere surface.
      *
@@ -198,7 +194,7 @@ export class Player {
 
         // Move the surfaceNormal along the great circle in the desired direction.
         _scratchVec2.crossVectors(_scratchVec, this._state.surfaceNormal).normalize();
-        const moveSpeed = MOVE_SPEED * (this._state.isSwimming ? SWIM_SPEED_FACTOR : 1);
+        const moveSpeed = GameConfig.player.moveSpeed * (this._state.isSwimming ? GameConfig.player.swimSpeedFactor : 1);
         _scratchQuat.setFromAxisAngle(_scratchVec2, moveSpeed);
 
         _scratchVec2.copy(this._state.surfaceNormal).applyQuaternion(_scratchQuat).normalize();
@@ -208,7 +204,10 @@ export class Player {
             return;
         }
 
-        if (this._decorations.collidesWith(nextSurfaceNormal, PLAYER_COLLISION_RADIUS)) {
+        const nextWorldPosition = _scratchVec.copy(nextSurfaceNormal)
+            .multiplyScalar(GameConfig.planet.radius);
+
+        if (this._collisionSystem.queryCollision(nextWorldPosition, GameConfig.player.collisionRadius)) {
             return;
         }
 
@@ -226,11 +225,11 @@ export class Player {
     /** Simple radial gravity + jump impulse. */
     private _applyGravity(): void {
         if (this._input.isDown('Space') && this._state.grounded) {
-            this._state.radialVelocity = JUMP_IMPULSE;
+            this._state.radialVelocity = GameConfig.player.jumpImpulse;
             this._state.grounded = false;
         }
 
-        this._state.radialVelocity -= GRAVITY;
+        this._state.radialVelocity -= GameConfig.player.gravity;
         this._state.altitude += this._state.radialVelocity;
 
         if (this._state.altitude <= 0) {
@@ -262,15 +261,15 @@ export class Player {
         // Position: scale the unit surface normal to the correct radius + altitude.
         this._group.position
             .copy(this._state.surfaceNormal)
-            .multiplyScalar(PLANET_RADIUS + this._state.altitude);
+            .multiplyScalar(GameConfig.planet.radius + this._state.altitude);
 
         // Step 1: Align local +Y with the surface normal (gravity).
         _scratchQuat.setFromUnitVectors(_worldUp, this._state.surfaceNormal);
         this._group.quaternion.copy(_scratchQuat);
 
-        // Step 2: Align local -Z with the forward tangent (facing direction).
-        //   currentLook = where local -Z points after gravity alignment
-        const currentLook = new THREE.Vector3(0, 0, -1).applyQuaternion(_scratchQuat);
+        // Step 2: Align local +Z with the forward tangent (facing direction).
+        //   currentLook = where local +Z points after gravity alignment
+        const currentLook = new THREE.Vector3(0, 0, 1).applyQuaternion(_scratchQuat);
         const facingRot = new THREE.Quaternion().setFromUnitVectors(currentLook, this._state.forward);
         this._group.quaternion.premultiply(facingRot);
     }
@@ -301,14 +300,14 @@ export class Player {
                 .normalize();
         }
 
-        _scratchVec2.copy(_scratchVec).multiplyScalar(-CAM_DISTANCE)
-            .addScaledVector(this._state.surfaceNormal, CAM_HEIGHT);
+        _scratchVec2.copy(_scratchVec).multiplyScalar(-GameConfig.camera.distance)
+            .addScaledVector(this._state.surfaceNormal, GameConfig.camera.height);
 
         _scratchVec.copy(this._group.position).add(_scratchVec2);
-        this._camera.position.lerp(_scratchVec, CAM_LERP);
+        this._camera.position.lerp(_scratchVec, GameConfig.camera.lerp);
 
         const lookTarget = _scratchVec2.copy(this._group.position)
-            .addScaledVector(this._state.surfaceNormal, PLAYER_HEIGHT + 0.5);
+            .addScaledVector(this._state.surfaceNormal, GameConfig.player.height + 0.5);
 
         this._camera.up.copy(this._state.surfaceNormal); // Prevent roll/spinning
         this._camera.lookAt(lookTarget);
