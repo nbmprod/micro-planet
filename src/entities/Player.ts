@@ -211,7 +211,9 @@ export class Player {
         _scratchVec2.copy(this._state.surfaceNormal).applyQuaternion(_scratchQuat).normalize();
         const nextSurfaceNormal = _scratchVec2;
 
-        if (!this._planet.isPointOnLand(nextSurfaceNormal)) {
+        // Allow movement on land, or on water if swimming is enabled
+        const isLand = this._planet.isPointOnLand(nextSurfaceNormal);
+        if (!isLand && !GameConfig.player.enableSwimming) {
             return;
         }
 
@@ -251,9 +253,25 @@ export class Player {
     }
 
     private _updateSwimmingState(): void {
-        this._state.isSwimming = false;
-        this._visual.position.y = 0;
-        this._visual.rotation.x = 0;
+        if (!GameConfig.player.enableSwimming) {
+            this._state.isSwimming = false;
+            this._visual.position.y = 0;
+            this._visual.rotation.x = 0;
+            return;
+        }
+
+        // Check if the player is currently on water
+        const isOnWater = !this._planet.isPointOnLand(this._state.surfaceNormal);
+        this._state.isSwimming = isOnWater && this._state.altitude <= 0.02;
+
+        if (this._state.isSwimming) {
+            // Slightly tilt body forward when swimming
+            this._visual.rotation.x = 0.15;
+            this._visual.position.y = -0.02;
+        } else {
+            this._visual.rotation.x = 0;
+            this._visual.position.y = 0;
+        }
     }
 
     /**

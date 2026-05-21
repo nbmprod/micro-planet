@@ -20,7 +20,7 @@ export const GameConfig = {
     oceanRoughness: 1,
     oceanMetalness: 0.3,
     oceanOpacity: 0.88,
-    // earthMaskUrl: 'src/config/assets/earth-land-mask.png',
+    earthMaskUrl: '/assets/earth-land-mask.png',
     // Deprecated: landZones is kept as a fallback until the earth mask loads.
     landZones: [
       { center: [0.34, 0.82, 0.20] as const, threshold: 0.78 },
@@ -64,6 +64,7 @@ export const GameConfig = {
     gravity: 0.008,
     startLatitudeDeg: 55,
     startLongitudeDeg: 37,
+    enableSwimming: true,
   },
 
   camera: {
