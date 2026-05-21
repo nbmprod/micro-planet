@@ -114,11 +114,22 @@ export class Player {
             this._visual.add(eye);
         }
 
-        // Initial position: north pole of the planet
-        this._state.surfaceNormal.set(0, 1, 0);
-        this._state.forward.set(0, 0, -1);
+        // Initial position from GameConfig, defaulting to the north pole.
+        const startLat = THREE.MathUtils.degToRad(GameConfig.player.startLatitudeDeg);
+        const startLon = THREE.MathUtils.degToRad(GameConfig.player.startLongitudeDeg);
+        this._state.surfaceNormal.set(
+            Math.cos(startLat) * Math.cos(startLon),
+            Math.sin(startLat),
+            Math.cos(startLat) * Math.sin(startLon),
+        );
+
+        this._state.forward.set(-Math.sin(startLon), 0, Math.cos(startLon));
+        this._state.forward
+            .addScaledVector(this._state.surfaceNormal, -this._state.forward.dot(this._state.surfaceNormal))
+            .normalize();
+
         this._group.add(this._visual);
-        this._group.position.set(0, GameConfig.planet.radius, 0);
+        this._group.position.copy(this._state.surfaceNormal).multiplyScalar(GameConfig.planet.radius);
 
         scene.add(this._group);
 
