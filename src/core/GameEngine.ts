@@ -5,6 +5,7 @@ import { Environment } from '../world/Environment';
 import { Planet } from '../world/Planet';
 import { DecorationManager } from '../world/DecorationManager';
 import { Player } from '../entities/Player';
+import { Penguin } from '../entities/Penguin';
 
 /**
  * GameEngine — the top-level orchestrator.
@@ -37,6 +38,7 @@ export class GameEngine {
     private readonly planet: Planet;
     private readonly decorations: DecorationManager;
     private readonly player: Player;
+    private readonly penguin: Penguin;
 
     // ── Internal ───────────────────────────────────────────
     private _rafId: number = 0;
@@ -90,6 +92,9 @@ export class GameEngine {
             this.decorations,
         );
 
+        // ── Penguin (NPC that walks around the terrain) ─
+        // this.penguin = new Penguin(this.scene, this.planet);
+
         // ── HUD references ────────────────────────────────────
         this._elCoords = document.getElementById('stat-coords')!;
         this._elAltitude = document.getElementById('stat-altitude')!;
@@ -118,6 +123,7 @@ export class GameEngine {
 
         this.planet.update();
         this.player.update();           // physics + quaternion math + camera
+        // this.penguin.update();          // penguin NPC patrol behavior
         this._updateHUD();
 
         this.renderer.render(this.scene, this.camera);
