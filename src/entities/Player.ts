@@ -102,13 +102,13 @@ export class Player {
             new THREE.MeshStandardMaterial({ color: 0xf5c58a, roughness: 0.5 }),
         );
         head.castShadow = true;
-        head.position.y = GameConfig.player.height + (0.72 / 3);
+        head.position.y = GameConfig.player.height + GameConfig.player.headOffsetY;
         this._visual.add(head);
 
         // Eyes (indicate facing direction through local +Z offset)
         const eyeGeo = new THREE.SphereGeometry(GameConfig.player.eyeRadius, 6, 6);
         const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-        for (const x of [-0.1 / 3, 0.1 / 3]) {
+        for (const x of [-GameConfig.player.eyeOffsetX, GameConfig.player.eyeOffsetX]) {
             const eye = new THREE.Mesh(eyeGeo, eyeMat);
             eye.position.set(x, GameConfig.player.height + GameConfig.player.eyeOffsetY, GameConfig.player.eyeOffsetZ);
             this._visual.add(eye);
