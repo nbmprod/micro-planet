@@ -6,14 +6,14 @@ import { Planet } from '../world/Planet';
 import { PLANET_RADIUS } from '../world/Planet';
 
 // ── Tuning constants ────────────────────────────────────────
-const PLAYER_HEIGHT = 0.35;  // local +Y offset of body centre above feet
-const MOVE_SPEED = 0.010; // angular step per frame (great-circle arc)
+const PLAYER_HEIGHT = 0.35 / 3;  // local +Y offset of body centre above feet (scaled 1/3)
+const MOVE_SPEED = 0.005; // angular step per frame (great-circle arc)
 const SWIM_SPEED_FACTOR = 0.70; // reduce movement speed in water
-const PLAYER_COLLISION_RADIUS = 0.32;
-const JUMP_IMPULSE = 0.18;  // initial radial velocity on jump
-const GRAVITY = 0.012; // radial acceleration toward planet each frame
-const CAM_DISTANCE = 5;     // chase distance behind player (world units)
-const CAM_HEIGHT = 3.2;   // camera height above player (local Y)
+const PLAYER_COLLISION_RADIUS = 0.32 / 3; // scaled collision radius
+const JUMP_IMPULSE = 0.09;  // initial radial velocity on jump
+const GRAVITY = 0.008; // radial acceleration toward planet each frame
+const CAM_DISTANCE = 2;     // chase distance behind player (world units)
+const CAM_HEIGHT = 1.2;   // camera height above player (local Y)
 const CAM_LERP = 0.50;  // position smoothing factor (0 = frozen, 1 = instant)
 
 // ── Reusable scratch objects (module-scoped, not per-frame allocated) ───────
@@ -95,7 +95,7 @@ export class Player {
 
         // Body
         const body = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5, 0.6, 0.3),
+            new THREE.BoxGeometry(0.5 / 3, 0.6 / 3, 0.3 / 3),
             new THREE.MeshStandardMaterial({ color: 0xe04020, roughness: 0.6 }),
         );
         body.castShadow = true;
@@ -104,19 +104,19 @@ export class Player {
 
         // Head
         const head = new THREE.Mesh(
-            new THREE.SphereGeometry(0.22, 12, 12),
+            new THREE.SphereGeometry(0.22 / 3, 12, 12),
             new THREE.MeshStandardMaterial({ color: 0xf5c58a, roughness: 0.5 }),
         );
         head.castShadow = true;
-        head.position.y = PLAYER_HEIGHT + 0.72;
+        head.position.y = PLAYER_HEIGHT + (0.72 / 3);
         this._visual.add(head);
 
         // Eyes (indicate facing direction through local +Z offset)
-        const eyeGeo = new THREE.SphereGeometry(0.055, 6, 6);
+        const eyeGeo = new THREE.SphereGeometry(0.055 / 3, 6, 6);
         const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-        for (const x of [-0.1, 0.1]) {
+        for (const x of [-0.1 / 3, 0.1 / 3]) {
             const eye = new THREE.Mesh(eyeGeo, eyeMat);
-            eye.position.set(x, PLAYER_HEIGHT + 0.74, 0.19);
+            eye.position.set(x, PLAYER_HEIGHT + (0.74 / 3), 0.19 / 3);
             this._visual.add(eye);
         }
 

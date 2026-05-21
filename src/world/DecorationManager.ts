@@ -65,7 +65,7 @@ export class DecorationManager {
             scene.add(mesh);
             this._colliderEntries.push({
                 position: mesh.position.clone(),
-                radius: entry.type === 'tree' ? 0.55 : 0.32,
+                radius: entry.type === 'tree' ? 0.55 / 3 : 0.32 / 3,
             });
         }
     }
@@ -106,16 +106,16 @@ export class DecorationManager {
         const group = new THREE.Group();
 
         const trunk = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.06, 0.09, 0.6, 6),
+            new THREE.CylinderGeometry(0.06 / 3, 0.09 / 3, 0.6 / 3, 6),
             new THREE.MeshStandardMaterial({ color: 0x6b3c11, roughness: 0.9 }),
         );
         trunk.castShadow = true;
 
         const foliage = new THREE.Mesh(
-            new THREE.ConeGeometry(0.35, 0.9, 6),
+            new THREE.ConeGeometry(0.35 / 3, 0.9 / 3, 6),
             new THREE.MeshStandardMaterial({ color: 0x1a7a2a, roughness: 0.8 }),
         );
-        foliage.position.y = 0.7;
+        foliage.position.y = 0.7 / 3;
         foliage.castShadow = true;
 
         group.add(trunk, foliage);
@@ -124,7 +124,7 @@ export class DecorationManager {
 
     private _buildRock(): THREE.Mesh {
         const rock = new THREE.Mesh(
-            new THREE.DodecahedronGeometry(0.22 + Math.random() * 0.15, 0),
+            new THREE.DodecahedronGeometry((0.22 + Math.random() * 0.15) / 3, 0),
             new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.95 }),
         );
         rock.castShadow = true;
