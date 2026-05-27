@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
 import { GameState } from '../core/GameState';
 import { InputManager } from '../core/InputManager';
 import { CollisionSystem } from '../core/CollisionSystem';
@@ -59,11 +60,24 @@ const _worldUp = new THREE.Vector3(0, 1, 0); // immutable reference axis
 export class Player {
     private readonly _group: THREE.Group;
     private readonly _visual: THREE.Group;
+    private readonly _placeholder: THREE.Group;
     private readonly _camera: THREE.PerspectiveCamera;
     private readonly _state: GameState;
     private readonly _input: InputManager;
     private readonly _planet: Planet;
     private readonly _collisionSystem: CollisionSystem;
+    private _model: THREE.Object3D | null = null;
+    private readonly _modelBones: Record<string, THREE.Bone[]> = {
+        leftArm: [],
+        rightArm: [],
+        leftLeg: [],
+        rightLeg: [],
+        spine: [],
+        neck: [],
+        head: [],
+    };
+    private readonly _boneBaseRotations: Map<THREE.Bone, THREE.Euler> = new Map();
+    private _walkTimer = 0;
 
     constructor(
         scene: THREE.Scene,
@@ -82,37 +96,10 @@ export class Player {
         // ── Build mesh hierarchy ───────────────────────────────
         this._group = new THREE.Group();
         this._visual = new THREE.Group();
+        this._placeholder = this._buildPlaceholder();
+        this._visual.add(this._placeholder);
 
-        // Body
-        const body = new THREE.Mesh(
-            new THREE.BoxGeometry(
-                GameConfig.player.bodyDimensions.x,
-                GameConfig.player.bodyDimensions.y,
-                GameConfig.player.bodyDimensions.z,
-            ),
-            new THREE.MeshStandardMaterial({ color: 0xe04020, roughness: 0.6 }),
-        );
-        body.castShadow = true;
-        body.position.y = GameConfig.player.height;
-        this._visual.add(body);
-
-        // Head
-        const head = new THREE.Mesh(
-            new THREE.SphereGeometry(GameConfig.player.headRadius, 12, 12),
-            new THREE.MeshStandardMaterial({ color: 0xf5c58a, roughness: 0.5 }),
-        );
-        head.castShadow = true;
-        head.position.y = GameConfig.player.height + GameConfig.player.headOffsetY;
-        this._visual.add(head);
-
-        // Eyes (indicate facing direction through local +Z offset)
-        const eyeGeo = new THREE.SphereGeometry(GameConfig.player.eyeRadius, 6, 6);
-        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-        for (const x of [-GameConfig.player.eyeOffsetX, GameConfig.player.eyeOffsetX]) {
-            const eye = new THREE.Mesh(eyeGeo, eyeMat);
-            eye.position.set(x, GameConfig.player.height + GameConfig.player.eyeOffsetY, GameConfig.player.eyeOffsetZ);
-            this._visual.add(eye);
-        }
+        this._loadPlayerModel();
 
         // Initial position from GameConfig, defaulting to the north pole.
         const startLat = THREE.MathUtils.degToRad(GameConfig.player.startLatitudeDeg);
@@ -144,6 +131,7 @@ export class Player {
      */
     update(): void {
         this._updateState();
+        this._animateModelPose();
         this._applyStateToVisuals();
         this._updateCamera();
         this._updateDerivedMetrics();
@@ -272,6 +260,149 @@ export class Player {
             this._visual.rotation.x = 0;
             this._visual.position.y = 0;
         }
+    }
+
+    private _buildPlaceholder(): THREE.Group {
+        const placeholder = new THREE.Group();
+
+        const body = new THREE.Mesh(
+            new THREE.BoxGeometry(
+                GameConfig.player.bodyDimensions.x,
+                GameConfig.player.bodyDimensions.y,
+                GameConfig.player.bodyDimensions.z,
+            ),
+            new THREE.MeshStandardMaterial({ color: 0xe04020, roughness: 0.6 }),
+        );
+        body.castShadow = true;
+        body.position.y = GameConfig.player.height;
+        placeholder.add(body);
+
+        const head = new THREE.Mesh(
+            new THREE.SphereGeometry(GameConfig.player.headRadius, 12, 12),
+            new THREE.MeshStandardMaterial({ color: 0xf5c58a, roughness: 0.5 }),
+        );
+        head.castShadow = true;
+        head.position.y = GameConfig.player.height + GameConfig.player.headOffsetY;
+        placeholder.add(head);
+
+        const eyeGeo = new THREE.SphereGeometry(GameConfig.player.eyeRadius, 6, 6);
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+        for (const x of [-GameConfig.player.eyeOffsetX, GameConfig.player.eyeOffsetX]) {
+            const eye = new THREE.Mesh(eyeGeo, eyeMat);
+            eye.position.set(x, GameConfig.player.height + GameConfig.player.eyeOffsetY, GameConfig.player.eyeOffsetZ);
+            placeholder.add(eye);
+        }
+
+        return placeholder;
+    }
+
+    private _loadPlayerModel(): void {
+        const loader = new FBXLoader();
+        loader.load(
+            GameConfig.player.modelUrl,
+            (fbx: THREE.Group) => {
+                const bbox = new THREE.Box3().setFromObject(fbx);
+                const height = bbox.max.y - bbox.min.y;
+                if (height > 0) {
+                    const scale = GameConfig.player.modelTargetHeight / height;
+                    fbx.scale.setScalar(scale);
+                }
+
+                const normalizedBbox = new THREE.Box3().setFromObject(fbx);
+                fbx.position.y -= normalizedBbox.min.y;
+
+                fbx.rotation.y = GameConfig.player.modelRotationY;
+
+                fbx.traverse((child: THREE.Object3D) => {
+                    if ((child as THREE.Mesh).isMesh) {
+                        const mesh = child as THREE.Mesh;
+                        mesh.castShadow = true;
+                        mesh.receiveShadow = true;
+                    }
+                });
+
+                this._visual.add(fbx);
+                this._placeholder.visible = false;
+                this._model = fbx;
+                this._buildModelBoneMap(fbx);
+            },
+            undefined,
+            (error: ErrorEvent) => {
+                console.warn('Failed to load player model:', error);
+            },
+        );
+    }
+
+    private _buildModelBoneMap(root: THREE.Object3D): void {
+        const bones: THREE.Bone[] = [];
+        root.traverse((child) => {
+            if ((child as THREE.Bone).isBone) {
+                bones.push(child as THREE.Bone);
+            }
+        });
+
+        if (bones.length === 0) return;
+
+        for (const bone of bones) {
+            const lowercase = bone.name.toLowerCase();
+            this._boneBaseRotations.set(bone, bone.rotation.clone());
+
+            if (/(left|l[_-]?)(arm|shoulder|upperarm|lowerarm)/i.test(lowercase)) {
+                this._modelBones.leftArm.push(bone);
+            }
+            if (/(right|r[_-]?)(arm|shoulder|upperarm|lowerarm)/i.test(lowercase)) {
+                this._modelBones.rightArm.push(bone);
+            }
+            if (/(left|l[_-]?)(leg|thigh|hamstring|calf|knee)/i.test(lowercase)) {
+                this._modelBones.leftLeg.push(bone);
+            }
+            if (/(right|r[_-]?)(leg|thigh|hamstring|calf|knee)/i.test(lowercase)) {
+                this._modelBones.rightLeg.push(bone);
+            }
+            if (/(spine|chest|torso|upperbody)/i.test(lowercase)) {
+                this._modelBones.spine.push(bone);
+            }
+            if (/neck/.test(lowercase)) {
+                this._modelBones.neck.push(bone);
+            }
+            if (/head/.test(lowercase)) {
+                this._modelBones.head.push(bone);
+            }
+        }
+    }
+
+    private _animateModelPose(): void {
+        if (!this._model) return;
+
+        const moveInput = Math.abs(this._input.axis('KeyW', 'KeyS')) + Math.abs(this._input.axis('KeyD', 'KeyA'));
+        const isWalking = moveInput > 0;
+        const speed = isWalking ? 1 : 0.2;
+        this._walkTimer += speed * 0.08;
+
+        const swing = Math.sin(this._walkTimer) * GameConfig.player.movementBoneSwing * Math.max(moveInput, 0.3);
+        const knee = Math.max(0, Math.sin(this._walkTimer + Math.PI / 2)) * GameConfig.player.movementBoneBend * Math.max(moveInput, 0.3);
+        const spineTwist = Math.sin(this._walkTimer) * 0.12 * Math.max(moveInput, 0.3);
+
+        const applyBoneRotation = (bones: THREE.Bone[], xOffset = 0, yOffset = 0) => {
+            for (const bone of bones) {
+                const base = this._boneBaseRotations.get(bone);
+                if (!base) continue;
+                bone.rotation.copy(base);
+                bone.rotation.x += xOffset;
+                bone.rotation.y += yOffset;
+            }
+        };
+
+        applyBoneRotation(this._modelBones.leftArm, swing);
+        applyBoneRotation(this._modelBones.rightArm, -swing);
+        applyBoneRotation(this._modelBones.leftLeg, -swing);
+        applyBoneRotation(this._modelBones.rightLeg, swing);
+        applyBoneRotation(this._modelBones.spine, 0, spineTwist);
+        applyBoneRotation(this._modelBones.neck, 0, -spineTwist * 0.5);
+        applyBoneRotation(this._modelBones.head, 0, -spineTwist * 0.5);
+
+        applyBoneRotation(this._modelBones.leftLeg, knee);
+        applyBoneRotation(this._modelBones.rightLeg, -knee);
     }
 
     /**
