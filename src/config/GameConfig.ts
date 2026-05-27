@@ -83,7 +83,7 @@ export const GameConfig = {
   // Networking configuration for multiplayer
   network: {
     // WebSocket server URL (use VITE_WS_URL env to override at build time)
-    serverUrl: ((import.meta as any).env?.VITE_WS_URL as string) || 'ws://localhost:3000',
+    serverUrl: ((import.meta as any).env?.VITE_WS_URL as string) || 'ws://localhost:5173',
     // How often to send position updates (ms)
     syncIntervalMs: 100,
     // Interpolation factor for remote players (0..1)
