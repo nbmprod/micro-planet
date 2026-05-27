@@ -1,19 +1,16 @@
 import * as THREE from 'three';
 import { NetworkManager } from './NetworkManager';
-import { Planet } from '../world/Planet';
 import RemotePlayer from '../entities/RemotePlayer';
 import { GameConfig } from '../config/GameConfig';
 
 export class PlayerManager {
   private scene: THREE.Scene;
-  private planet: Planet;
   private network: NetworkManager;
   private players: Map<string, RemotePlayer> = new Map();
   private interpolation: number;
 
-  constructor(scene: THREE.Scene, planet: Planet, network: NetworkManager) {
+  constructor(scene: THREE.Scene, network: NetworkManager) {
     this.scene = scene;
-    this.planet = planet;
     this.network = network;
     this.interpolation = GameConfig.network.interpolationFactor;
 
@@ -54,7 +51,7 @@ export class PlayerManager {
   private _addOrUpdateRemote(playerId: string, color: number, info?: any) {
     let p = this.players.get(playerId);
     if (!p) {
-      p = new RemotePlayer(this.scene, playerId, color, this.planet);
+      p = new RemotePlayer(this.scene, playerId, color);
       this.players.set(playerId, p);
     }
     if (info) p.syncFromNetwork(info);
@@ -69,7 +66,7 @@ export class PlayerManager {
 
   update() {
     for (const p of this.players.values()) {
-      p.update(this.planet, this.interpolation);
+      p.update(this.interpolation);
     }
   }
 }

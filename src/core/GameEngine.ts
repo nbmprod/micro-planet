@@ -43,8 +43,8 @@ export class GameEngine {
     private readonly player: Player;
 
     // Networking
-    private readonly network!: NetworkManager;
-    private readonly playerManager!: PlayerManager;
+    private readonly network: NetworkManager;
+    private readonly playerManager: PlayerManager;
 
     // ── Internal ───────────────────────────────────────────
     private _rafId: number = 0;
@@ -102,22 +102,18 @@ export class GameEngine {
 
         // ── Networking & remote players ───────────────────────
         // Note: NetworkManager connects to an external relay server.
-        (this as any).network = new NetworkManager(GameConfig.network.serverUrl);
-        (this as any).playerManager = new PlayerManager(this.scene, this.planet, (this as any).network);
+        this.network = new NetworkManager(GameConfig.network.serverUrl);
+        this.playerManager = new PlayerManager(this.scene, this.network);
 
-        (this as any).network.on('JOINED', (msg: any) => {
+        this.network.on('JOINED', (msg: any) => {
             if (msg.playerId) this.state.playerId = msg.playerId;
             if (typeof msg.color === 'number') {
                 this.state.playerColor = msg.color;
-                try {
-                    this.player.setColor(msg.color);
-                } catch (e) {
-                    // ignore if player doesn't expose setColor yet
-                }
+                this.player.setColor(msg.color);
             }
         });
 
-        (this as any).network.connect();
+        this.network.connect();
 
         // ── HUD references ────────────────────────────────────
         this._elCoords = document.getElementById('stat-coords')!;
@@ -148,21 +144,21 @@ export class GameEngine {
         this.planet.update();
         this.player.update();           // physics + quaternion math + camera
         // update remote players
-        (this as any).playerManager.update();
+        this.playerManager.update();
         // this.penguin.update();          // penguin NPC patrol behavior
         this._updateHUD();
 
         // Periodic network sync of local player state
         try {
             const nowMs = performance.now();
-            if ((this as any).network && GameConfig.network.enableMultiplayer && nowMs - this._lastSyncMs >= GameConfig.network.syncIntervalMs) {
+            if (GameConfig.network.enableMultiplayer && nowMs - this._lastSyncMs >= GameConfig.network.syncIntervalMs) {
                 const s = this.state;
                 const isMoving = this.input.axis('KeyW', 'KeyS') !== 0 ||
                     this.input.axis('KeyD', 'KeyA') !== 0 ||
                     this.input.axis('ArrowUp', 'ArrowDown') !== 0 ||
                     this.input.axis('ArrowRight', 'ArrowLeft') !== 0;
 
-                (this as any).network.sendMove({
+                this.network.sendMove({
                     playerId: s.playerId,
                     position: [s.surfaceNormal.x, s.surfaceNormal.y, s.surfaceNormal.z],
                     forward: [s.forward.x, s.forward.y, s.forward.z],

@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { Planet } from '../world/Planet';
 import { GameConfig } from '../config/GameConfig';
 
 export class RemotePlayer {
@@ -15,7 +14,7 @@ export class RemotePlayer {
   private _currentForward: THREE.Vector3 = new THREE.Vector3(0, 0, -1);
   private _currentAltitude: number = 0;
 
-  constructor(scene: THREE.Scene, id: string, color: number, planet: Planet) {
+  constructor(scene: THREE.Scene, id: string, color: number) {
     this.id = id;
     this.color = color;
 
@@ -28,7 +27,7 @@ export class RemotePlayer {
     // Initialize somewhere on the surface
     this._currentSurfaceNormal.set(0, 1, 0);
     this._currentForward.set(0, 0, -1);
-    this._applyTransform(planet);
+    this._applyTransform();
   }
 
   dispose(scene: THREE.Scene) {
@@ -45,16 +44,16 @@ export class RemotePlayer {
     if (typeof msg.altitude === 'number') this._targetAltitude = msg.altitude;
   }
 
-  update(planet: Planet, interpolationFactor: number) {
+  update(interpolationFactor: number) {
     // Lerp normals and forward then renormalize
     this._currentSurfaceNormal.lerp(this._targetSurfaceNormal, interpolationFactor).normalize();
     this._currentForward.lerp(this._targetForward, interpolationFactor).normalize();
     this._currentAltitude += (this._targetAltitude - this._currentAltitude) * interpolationFactor;
 
-    this._applyTransform(planet);
+    this._applyTransform();
   }
 
-  private _applyTransform(planet: Planet) {
+  private _applyTransform() {
     const radius = GameConfig.planet.radius + this._currentAltitude;
     this._group.position.copy(this._currentSurfaceNormal).multiplyScalar(radius);
 
