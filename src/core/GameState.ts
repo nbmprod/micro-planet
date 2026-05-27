@@ -38,6 +38,13 @@ export class GameState {
     /** True when the player is swimming instead of walking. */
     isSwimming: boolean = false;
 
+    // ── Identity (multiplayer) ──────────────────────────────
+    /** Assigned player id from server (or client-generated). */
+    playerId: string | null = null;
+
+    /** Assigned player colour (hex) for rendering remote and local players. */
+    playerColor: number | null = null;
+
     // ── Derived HUD metrics (recomputed each frame) ─────────
     /** Latitude in degrees derived from surfaceNormal.y. */
     latitudeDeg: number = 0;

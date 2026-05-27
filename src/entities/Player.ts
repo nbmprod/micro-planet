@@ -61,6 +61,7 @@ export class Player {
     private readonly _group: THREE.Group;
     private readonly _visual: THREE.Group;
     private readonly _placeholder: THREE.Group;
+    private _bodyMesh: THREE.Mesh | null = null;
     private readonly _camera: THREE.PerspectiveCamera;
     private readonly _state: GameState;
     private readonly _input: InputManager;
@@ -96,6 +97,13 @@ export class Player {
         // ── Build mesh hierarchy ───────────────────────────────
         this._group = new THREE.Group();
         this._visual = new THREE.Group();
+
+        // Ensure the local player has a colour (use a random palette pick if not set)
+        if (!this._state.playerColor) {
+            const colors = GameConfig.playerColors as readonly number[];
+            this._state.playerColor = colors[Math.floor(Math.random() * colors.length)];
+        }
+
         this._placeholder = this._buildPlaceholder();
         this._visual.add(this._placeholder);
 
@@ -271,10 +279,12 @@ export class Player {
                 GameConfig.player.bodyDimensions.y,
                 GameConfig.player.bodyDimensions.z,
             ),
-            new THREE.MeshStandardMaterial({ color: 0xe04020, roughness: 0.6 }),
+            new THREE.MeshStandardMaterial({ color: this._state.playerColor ?? 0xe04020, roughness: 0.6 }),
         );
         body.castShadow = true;
         body.position.y = GameConfig.player.height;
+        body.userData.role = 'body';
+        this._bodyMesh = body;
         placeholder.add(body);
 
         const head = new THREE.Mesh(
@@ -483,4 +493,13 @@ export class Player {
         // FUTURE_HOOK: Look up biome from a lat/lon map texture sampler here.
         // FUTURE_HOOK: Update state.pollutionLevel based on proximity to factories.
     }
+
+    /** Update the player's visible colour (applies to the body only). */
+    setColor(hex: number) {
+        if (this._bodyMesh) {
+            const mat = this._bodyMesh.material as any;
+            if (mat && mat.color) mat.color.setHex(hex);
+        }
+    }
 }
+

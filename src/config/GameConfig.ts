@@ -80,6 +80,36 @@ export const GameConfig = {
     lerp: 0.1,
   },
 
+  // Networking configuration for multiplayer
+  network: {
+    // WebSocket server URL (use VITE_WS_URL env to override at build time)
+    serverUrl: (import.meta.env && import.meta.env.VITE_WS_URL) || 'ws://localhost:3000',
+    // How often to send position updates (ms)
+    syncIntervalMs: 100,
+    // Interpolation factor for remote players (0..1)
+    interpolationFactor: 0.15,
+    // Enable multiplayer at runtime
+    enableMultiplayer: true,
+  },
+
+  // Palette of colors to assign to players. Chosen randomly for now.
+  playerColors: [
+    0xff6b6b, // red
+    0x4ecdc4, // teal
+    0x457bd1, // blue
+    0xffa07a, // light salmon
+    0xffd166, // yellow
+    0x9b5de5, // purple
+  ] as const,
+
+  // Spawn zones (lat, lon) to pick initial positions for new players
+  spawnZones: [
+    { latDeg: 55, lonDeg: 37 },
+    { latDeg: -55, lonDeg: -37 },
+    { latDeg: 0, lonDeg: 90 },
+    { latDeg: 0, lonDeg: -90 },
+  ] as const,
+
   decoration: {
     treeColliderRadius: 0.55 / 1,
     rockColliderRadius: 0.32 / 1,

@@ -6,6 +6,9 @@ import { Planet } from '../world/Planet';
 import { DecorationManager } from '../world/DecorationManager';
 import { CollisionSystem } from './CollisionSystem';
 import { Player } from '../entities/Player';
+import { NetworkManager } from './NetworkManager';
+import PlayerManager from './PlayerManager';
+import { GameConfig } from '../config/GameConfig';
 
 /**
  * GameEngine — the top-level orchestrator.
@@ -39,9 +42,14 @@ export class GameEngine {
     private readonly collisionSystem: CollisionSystem;
     private readonly player: Player;
 
+    // Networking
+    private readonly network!: NetworkManager;
+    private readonly playerManager!: PlayerManager;
+
     // ── Internal ───────────────────────────────────────────
     private _rafId: number = 0;
     private _time: number = 0;
+    private _lastSyncMs: number = 0;
 
     // ── HUD element refs ───────────────────────────────────
     private readonly _elCoords: HTMLElement;
@@ -92,6 +100,25 @@ export class GameEngine {
             this.collisionSystem,
         );
 
+        // ── Networking & remote players ───────────────────────
+        // Note: NetworkManager connects to an external relay server.
+        (this as any).network = new NetworkManager(GameConfig.network.serverUrl);
+        (this as any).playerManager = new PlayerManager(this.scene, this.planet, (this as any).network);
+
+        (this as any).network.on('JOINED', (msg: any) => {
+            if (msg.playerId) this.state.playerId = msg.playerId;
+            if (typeof msg.color === 'number') {
+                this.state.playerColor = msg.color;
+                try {
+                    this.player.setColor(msg.color);
+                } catch (e) {
+                    // ignore if player doesn't expose setColor yet
+                }
+            }
+        });
+
+        (this as any).network.connect();
+
         // ── HUD references ────────────────────────────────────
         this._elCoords = document.getElementById('stat-coords')!;
         this._elAltitude = document.getElementById('stat-altitude')!;
@@ -120,8 +147,37 @@ export class GameEngine {
 
         this.planet.update();
         this.player.update();           // physics + quaternion math + camera
+        // update remote players
+        (this as any).playerManager.update();
         // this.penguin.update();          // penguin NPC patrol behavior
         this._updateHUD();
+
+        // Periodic network sync of local player state
+        try {
+            const nowMs = performance.now();
+            if ((this as any).network && GameConfig.network.enableMultiplayer && nowMs - this._lastSyncMs >= GameConfig.network.syncIntervalMs) {
+                const s = this.state;
+                const isMoving = this.input.axis('KeyW', 'KeyS') !== 0 ||
+                    this.input.axis('KeyD', 'KeyA') !== 0 ||
+                    this.input.axis('ArrowUp', 'ArrowDown') !== 0 ||
+                    this.input.axis('ArrowRight', 'ArrowLeft') !== 0;
+
+                (this as any).network.sendMove({
+                    playerId: s.playerId,
+                    position: [s.surfaceNormal.x, s.surfaceNormal.y, s.surfaceNormal.z],
+                    forward: [s.forward.x, s.forward.y, s.forward.z],
+                    altitude: s.altitude,
+                    grounded: s.grounded,
+                    isSwimming: s.isSwimming,
+                    isMoving,
+                    timestamp: Date.now(),
+                });
+                this._lastSyncMs = nowMs;
+            }
+        } catch (e) {
+            // Swallow network errors — network subsystem handles reconnection
+            console.warn('Network sync error', e);
+        }
 
         this.renderer.render(this.scene, this.camera);
     };
