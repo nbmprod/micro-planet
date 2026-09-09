@@ -13,6 +13,10 @@ dist/
 .env
 .env.local
 
+# playcanvas-sync config (contains API key — see pcconfig.json.example)
+pcconfig.json
+.pcconfig
+
 # IDE and OS specific files
 .DS_Store
 .vscode/

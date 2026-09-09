@@ -8,16 +8,19 @@
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
-    "start-relay": "node server/relay.js"
+    "start-relay": "node server/relay.js",
+    "sync:pull": "cd scripts && pcsync pull",
+    "sync:watch": "cd scripts && pcsync watch"
   },
   "dependencies": {
     "three": "^0.163.0",
-    "ws": "^8.13.0",
-    "uuid": "^9.0.0"
-  }, 
+    "uuid": "^9.0.0",
+    "ws": "^8.13.0"
+  },
   "devDependencies": {
     "@types/three": "^0.163.0",
     "gh-pages": "^6.3.0",
+    "playcanvas-sync": "^2.1.1",
     "typescript": "^5.4.5",
     "vite": "^5.4.21"
   }
